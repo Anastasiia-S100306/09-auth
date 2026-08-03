@@ -54,7 +54,7 @@ export async function proxy(request: NextRequest) {
 
         if (setCookie) {
           if (isPublicRoute) {
-            const response = NextResponse.redirect(new URL("/profile", request.url));
+            const response = NextResponse.redirect(new URL("/", request.url));
             applyParsedCookies(response, setCookie);
             return response;
           }
@@ -77,7 +77,7 @@ export async function proxy(request: NextRequest) {
   }
 
   if (isPublicRoute) {
-    return NextResponse.redirect(new URL("/profile", request.url));
+    return NextResponse.redirect(new URL("/", request.url));
   }
 
   return NextResponse.next();
