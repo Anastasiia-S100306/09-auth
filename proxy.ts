@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { checkSession } from "@/lib/api/serverApi";
 import { parseSetCookie } from "cookie";
 
@@ -27,57 +26,53 @@ function applyParsedCookies(
     }
   }
 }
+
 export async function proxy(request: NextRequest) {
-
   const { pathname } = request.nextUrl;
-  const cookieStore = await cookies();
 
-  const accessToken = cookieStore.get("accessToken")?.value;
-  const refreshToken = cookieStore.get("refreshToken")?.value;
-
-  const isPrivateRoute = privateRoutes.some((route) =>
-    pathname.startsWith(route)
+  // Точне співставлення (щоб /profiled чи /notesextra НЕ збігалися з /profile чи /notes)
+  const isPrivateRoute = privateRoutes.some(
+    (route) => pathname === route || pathname.startsWith(`${route}/`)
   );
-  const isPublicRoute = publicRoutes.some((route) =>
-    pathname.startsWith(route)
+  const isPublicRoute = publicRoutes.some(
+    (route) => pathname === route || pathname.startsWith(`${route}/`)
   );
 
   if (!isPrivateRoute && !isPublicRoute) {
     return NextResponse.next();
   }
 
-  if (!accessToken) {
-    if (refreshToken) {
-      try {
-        const data = await checkSession();
-        const setCookie = data.headers["set-cookie"];
+  const accessToken = request.cookies.get("accessToken")?.value;
+  const refreshToken = request.cookies.get("refreshToken")?.value;
 
-        if (setCookie) {
-          if (isPublicRoute) {
-            const response = NextResponse.redirect(new URL("/", request.url));
-            applyParsedCookies(response, setCookie);
-            return response;
-          }
-           const response = NextResponse.redirect(new URL(request.url));
+  if (!accessToken && refreshToken) {
+    try {
+      const data = await checkSession();
+      const setCookie = data.headers["set-cookie"];
+
+      if (setCookie) {
+        if (isPublicRoute) {
+          const response = NextResponse.redirect(new URL("/", request.url));
           applyParsedCookies(response, setCookie);
           return response;
         }
-      } catch {
-        // Session refresh failed — fall through to unauthenticated handling
+
+        // Повертаємо next() замість redirect для приватного маршруту
+        const response = NextResponse.next();
+        applyParsedCookies(response, setCookie);
+        return response;
       }
-    }
-
-    if (isPublicRoute) {
-      return NextResponse.next();
-    }
-
-    if (isPrivateRoute) {
-      return NextResponse.redirect(new URL("/sign-in", request.url));
+    } catch {
+      // Session refresh failed
     }
   }
 
-  if (isPublicRoute) {
+  if (isPublicRoute && (accessToken || refreshToken)) {
     return NextResponse.redirect(new URL("/", request.url));
+  }
+
+  if (isPrivateRoute && !accessToken && !refreshToken) {
+    return NextResponse.redirect(new URL("/sign-in", request.url));
   }
 
   return NextResponse.next();
