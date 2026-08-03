@@ -58,7 +58,7 @@ export async function proxy(request: NextRequest) {
             applyParsedCookies(response, setCookie);
             return response;
           }
-           const response = NextResponse.next();
+           const response = NextResponse.redirect(new URL(request.url));
           applyParsedCookies(response, setCookie);
           return response;
         }
